@@ -52,6 +52,34 @@ class DashboardTest extends TestCase
         $response->assertSeeInOrder(['high-star-repo', 'low-star-repo']);
     }
 
+    public function test_it_calculates_the_pulse_score_against_the_same_hour_baseline(): void
+    {
+        $currentHour = now()->hour;
+        $otherHour = ($currentHour + 6) % 24;
+
+        // 3 events in the current rolling hour.
+        Event::factory()->count(3)->create(['occurred_at' => now()->subMinutes(10)]);
+
+        // 2 events at the same hour-of-day, 2 days ago - counts toward baseline.
+        Event::factory()->count(2)->create([
+            'occurred_at' => now()->subDays(2)->setTime($currentHour, 30),
+        ]);
+
+        // A decoy at a different hour - must not count toward the baseline.
+        Event::factory()->create([
+            'occurred_at' => now()->subDays(3)->setTime($otherHour, 15),
+        ]);
+
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+        $response->assertViewHas('pulse', function ($pulse) {
+            return $pulse['current'] === 3
+                && abs($pulse['baseline'] - (2 / 7)) < 0.0001
+                && $pulse['percent'] === 1050;
+        });
+    }
+
     public function test_it_shows_new_arrivals_from_the_last_seven_days(): void
     {
         // Both subjects would land in the "Trending" section too (there's

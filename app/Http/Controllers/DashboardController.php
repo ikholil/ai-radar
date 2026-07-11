@@ -25,9 +25,15 @@ class DashboardController extends Controller
     {
         $currentHourCount = Event::where('occurred_at', '>=', now()->subHour())->count();
 
+        // Filtered in PHP rather than via a DB-specific hour-extraction
+        // function (SQLite's strftime vs Postgres's EXTRACT) - a week of
+        // events is small enough that this isn't a performance concern.
+        $targetHour = (int) now()->format('H');
+
         $sameHourDays = Event::where('occurred_at', '>=', now()->subDays(7))
             ->where('occurred_at', '<', now()->subHour())
-            ->whereRaw("CAST(strftime('%H', occurred_at) AS INTEGER) = ?", [(int) now()->format('H')])
+            ->get(['occurred_at'])
+            ->filter(fn (Event $event) => (int) $event->occurred_at->format('H') === $targetHour)
             ->count();
 
         $baseline = $sameHourDays > 0 ? $sameHourDays / 7 : null;
