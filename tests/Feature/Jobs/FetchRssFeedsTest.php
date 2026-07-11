@@ -42,6 +42,49 @@ XML;
     }
 
     /**
+     * A 3-item subset captured 2026-07-11 from https://openai.com/news/rss.xml
+     * (real title/link/description/pubDate).
+     */
+    private function sampleOpenAiFeed(): string
+    {
+        return <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title><![CDATA[OpenAI News]]></title>
+        <description><![CDATA[The OpenAI blog]]></description>
+        <link>https://openai.com/news</link>
+        <generator>OpenAI</generator>
+        <lastBuildDate>Sat, 11 Jul 2026 06:45:09 GMT</lastBuildDate>
+        <atom:link href="https://openai.com/news/rss" rel="self" type="application/rss+xml"/>
+        <item>
+            <title><![CDATA[How Deutsche Telekom is rewiring telecommunications with AI]]></title>
+            <description><![CDATA[How Deutsche Telekom is becoming an AI-native telco with OpenAI-transforming customer service, employee workflows, network operations, and the future of voice.]]></description>
+            <link>https://openai.com/index/deutsche-telekom</link>
+            <guid isPermaLink="true">https://openai.com/index/deutsche-telekom</guid>
+            <pubDate>Fri, 10 Jul 2026 07:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[GPT-5.6 is now the preferred model in Microsoft 365 Copilot]]></title>
+            <description><![CDATA[Learn how GPT-5.6 powers Microsoft 365 Copilot with stronger AI capabilities across Word, Excel, PowerPoint, Chat, and Cowork for faster, higher-quality work.]]></description>
+            <link>https://openai.com/index/gpt-5-6-preferred-model-microsoft-365-copilot</link>
+            <guid isPermaLink="true">https://openai.com/index/gpt-5-6-preferred-model-microsoft-365-copilot</guid>
+            <category><![CDATA[Product]]></category>
+            <pubDate>Thu, 09 Jul 2026 13:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[GPT-5.6: Frontier intelligence that scales with your ambition]]></title>
+            <description><![CDATA[More intelligence from every token, stronger performance per dollar, and more capability on demand for your hardest work.]]></description>
+            <link>https://openai.com/index/gpt-5-6</link>
+            <guid isPermaLink="true">https://openai.com/index/gpt-5-6</guid>
+            <category><![CDATA[Product]]></category>
+            <pubDate>Thu, 09 Jul 2026 10:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>
+XML;
+    }
+
+    /**
      * A 3-entry subset captured 2026-07-11 from
      * https://www.reddit.com/r/LocalLLaMA/new.rss (real title/link/content/dates).
      */
@@ -104,6 +147,26 @@ XML;
         $this->assertSame('We shipped a new model today.', $event->summary);
     }
 
+    public function test_it_creates_blog_post_events_from_the_openai_rss_feed(): void
+    {
+        Http::fake([
+            'openai.com/news/*' => Http::response($this->sampleOpenAiFeed()),
+            '*' => Http::response(''),
+        ]);
+
+        (new FetchRssFeeds)->handle();
+
+        $this->assertDatabaseCount('events', 3);
+
+        $event = Event::where('url', 'https://openai.com/index/gpt-5-6')->firstOrFail();
+        $this->assertSame(EventType::BlogPost, $event->type);
+        $this->assertSame('GPT-5.6: Frontier intelligence that scales with your ambition', $event->title);
+        $this->assertSame('blog_openai', $event->source);
+        $this->assertNull($event->subject_id);
+        $this->assertStringContainsString('performance per dollar', $event->summary);
+        $this->assertSame('2026-07-09T10:00:00+00:00', $event->occurred_at->toIso8601String());
+    }
+
     public function test_it_creates_community_post_events_from_a_reddit_feed(): void
     {
         Http::fake([
@@ -128,14 +191,15 @@ XML;
     {
         Http::fake([
             'simonwillison.net/*' => Http::response($this->sampleAtomFeed()),
+            'openai.com/news/*' => Http::response($this->sampleOpenAiFeed()),
             'reddit.com/r/LocalLLaMA/*' => Http::response($this->sampleRedditFeed()),
             '*' => Http::response(''),
         ]);
 
         (new FetchRssFeeds)->handle();
 
-        // 2 from Simon Willison + 3 from r/LocalLLaMA; the other two
-        // configured subreddits get the default empty fake response.
-        $this->assertDatabaseCount('events', 5);
+        // 2 from Simon Willison + 3 from OpenAI + 3 from r/LocalLLaMA; the
+        // other two configured subreddits get the default empty fake response.
+        $this->assertDatabaseCount('events', 8);
     }
 }

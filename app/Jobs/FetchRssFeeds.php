@@ -20,12 +20,13 @@ class FetchRssFeeds implements ShouldQueue
     public int $tries = 3;
 
     /**
-     * Additional blog feeds (OpenAI, Anthropic, Google AI blog) are pending
-     * a confirmed working URL - their published addresses either redirect
+     * Additional blog feeds (Anthropic, Google AI blog) are pending a
+     * confirmed working URL - their published addresses either redirect
      * or 404 as of this writing.
      */
     private const FEEDS = [
         ['source' => 'blog_simonwillison', 'url' => 'https://simonwillison.net/atom/everything/', 'type' => EventType::BlogPost],
+        ['source' => 'blog_openai', 'url' => 'https://openai.com/news/rss.xml', 'type' => EventType::BlogPost],
         ['source' => 'reddit_LocalLLaMA', 'url' => 'https://www.reddit.com/r/LocalLLaMA/new.rss', 'type' => EventType::CommunityPost],
         ['source' => 'reddit_MachineLearning', 'url' => 'https://www.reddit.com/r/MachineLearning/new.rss', 'type' => EventType::CommunityPost],
         ['source' => 'reddit_singularity', 'url' => 'https://www.reddit.com/r/singularity/new.rss', 'type' => EventType::CommunityPost],
