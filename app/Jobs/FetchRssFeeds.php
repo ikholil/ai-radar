@@ -20,12 +20,15 @@ class FetchRssFeeds implements ShouldQueue
     public int $tries = 3;
 
     /**
-     * Additional feeds (OpenAI, Anthropic, Google AI blog) are pending a
-     * confirmed working URL - their published addresses either redirect
+     * Additional blog feeds (OpenAI, Anthropic, Google AI blog) are pending
+     * a confirmed working URL - their published addresses either redirect
      * or 404 as of this writing.
      */
     private const FEEDS = [
-        ['source' => 'blog_simonwillison', 'url' => 'https://simonwillison.net/atom/everything/'],
+        ['source' => 'blog_simonwillison', 'url' => 'https://simonwillison.net/atom/everything/', 'type' => EventType::BlogPost],
+        ['source' => 'reddit_LocalLLaMA', 'url' => 'https://www.reddit.com/r/LocalLLaMA/new.rss', 'type' => EventType::CommunityPost],
+        ['source' => 'reddit_MachineLearning', 'url' => 'https://www.reddit.com/r/MachineLearning/new.rss', 'type' => EventType::CommunityPost],
+        ['source' => 'reddit_singularity', 'url' => 'https://www.reddit.com/r/singularity/new.rss', 'type' => EventType::CommunityPost],
     ];
 
     public function handle(): void
@@ -37,7 +40,7 @@ class FetchRssFeeds implements ShouldQueue
                 ->body();
 
             foreach ($this->parseEntries($body) as $entry) {
-                $this->processEntry($feed['source'], $entry);
+                $this->processEntry($feed['source'], $entry, $feed['type']);
             }
         }
     }
@@ -47,6 +50,10 @@ class FetchRssFeeds implements ShouldQueue
      */
     private function parseEntries(string $xml): array
     {
+        if (trim($xml) === '') {
+            return [];
+        }
+
         $doc = simplexml_load_string($xml);
 
         if ($doc === false) {
@@ -72,10 +79,17 @@ class FetchRssFeeds implements ShouldQueue
                 }
             }
 
+            // Reddit's Atom feed has no <summary>, only <content type="html">
+            // holding the full post body.
+            $summarySource = (string) $entry->summary;
+            if ($summarySource === '') {
+                $summarySource = (string) $entry->content;
+            }
+
             $entries[] = [
                 'title' => (string) $entry->title,
                 'url' => $link,
-                'summary' => $this->cleanSummary((string) $entry->summary),
+                'summary' => $this->cleanSummary($summarySource),
                 'published_at' => (string) ($entry->published ?: $entry->updated),
             ];
         }
@@ -106,7 +120,7 @@ class FetchRssFeeds implements ShouldQueue
         return $text === '' ? null : Str::limit($text, 1000);
     }
 
-    private function processEntry(string $source, array $entry): void
+    private function processEntry(string $source, array $entry, EventType $type): void
     {
         if ($entry['url'] === '') {
             return;
@@ -115,7 +129,7 @@ class FetchRssFeeds implements ShouldQueue
         Event::firstOrCreate(
             ['source' => $source, 'url' => $entry['url']],
             [
-                'type' => EventType::BlogPost,
+                'type' => $type,
                 'subject_id' => null,
                 'title' => $entry['title'] !== '' ? $entry['title'] : '(untitled)',
                 'summary' => $entry['summary'],
