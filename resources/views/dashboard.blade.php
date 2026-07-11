@@ -4,7 +4,15 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>AI Radar — Live Ecosystem Feed</title>
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+            @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @else
+            {{-- Compiled assets aren't built yet (npm run build hasn't run on
+                 this deploy) - fall back to CDN Tailwind/Alpine rather than
+                 hard-crashing the whole page on a missing manifest. --}}
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+        @endif
     </head>
     <body class="min-h-screen bg-neutral-950 font-mono text-slate-200 antialiased">
         <div x-data="{ filter: 'all' }" class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
